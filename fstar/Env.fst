@@ -13,3 +13,9 @@ type label_env = env label
 
 let empty_value_env = empty_env 0
 let empty_label_env = empty_env Low
+
+val is_low : label_env -> var -> bool
+let is_low lenv var = lookup_env lenv var = Low
+
+val is_high : label_env -> var -> bool
+let is_high lenv var = lookup_env lenv var = High
