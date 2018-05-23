@@ -11,14 +11,18 @@ let rec label_of_exp lenv e = match e with
  | BinOp left _ right -> lub (label_of_exp lenv left) (label_of_exp lenv right)
 
 
-val ni_com : label_env -> com -> label -> bool
-let rec ni_com lenv com pc_label = match com with
+val typed_com : label_env -> com -> label -> bool
+let rec typed_com lenv com pc_label = match com with
  | Skip -> true
- | Assign v e -> lub pc_label (label_of_exp lenv e) <= lookup_env lenv v
- | Sequence s1 s2 -> ni_com lenv s1 pc_label && ni_com lenv s2 pc_label
+ | Assign v e -> (match lub pc_label (label_of_exp lenv e), lookup_env lenv v with
+   (* <= *)
+   | High, Low -> false
+   | _, _ -> true)
+
+ | Sequence s1 s2 -> typed_com lenv s1 pc_label && typed_com lenv s2 pc_label
  | If cond thn els -> let l = lub pc_label (label_of_exp lenv cond) in
-                                  ni_com lenv thn l && ni_com lenv els l
- | While cond body -> ni_com lenv body (lub pc_label (label_of_exp lenv cond))
+                                  typed_com lenv thn l && typed_com lenv els l
+ | While cond body -> typed_com lenv body (lub pc_label (label_of_exp lenv cond))
 
 
 val seq : list com -> com
@@ -45,6 +49,6 @@ let _ =
 		  (Assign "lo" (Int 7))
 	] in
 
-	assert (not (ni_com lenv prog_test Low));
-	assert (ni_com lenv prog_slides Low);
-	assert (not (ni_com lenv prog_ni_fail Low))
+	assert (not (typed_com lenv prog_test Low));
+	assert (typed_com lenv prog_slides Low);
+	assert (not (typed_com lenv prog_ni_fail Low))
