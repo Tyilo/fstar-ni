@@ -123,20 +123,45 @@ val ni_seq : lenv:label_env -> c1:com -> c2:com ->
 let ni_seq lenv c1 c2 = ()
 *)
 
-val fuel_decr : env:value_env -> com:com -> fuel:nat ->
+val out_of_fuel_implies_zero_fuel : env:value_env -> com:com -> fuel:nat ->
   Lemma (requires (Result?.result (interpret_com env com fuel) = OutOfFuel))
         (ensures (Result?.fuel (interpret_com env com fuel) = 0))
-let rec fuel_decr env com fuel = match com with
+let rec out_of_fuel_implies_zero_fuel env com fuel = match com with
  | Skip -> ()
  | Assign _ _ -> ()
  | If cond thn els ->
 					  if (not (interpret_exp env cond = 0)) then
-                        fuel_decr env thn fuel
+                        out_of_fuel_implies_zero_fuel env thn fuel
 					  else
-                        fuel_decr env els fuel
- | Sequence c1 c2 -> admit()
- | _ -> admit()
+                        out_of_fuel_implies_zero_fuel env els fuel
+ | Sequence c1 c2 -> let Result res env' fuel' = interpret_com env c1 fuel in
+                                              if res = OutOfFuel then
+												out_of_fuel_implies_zero_fuel env c1 fuel
+											  else
+												out_of_fuel_implies_zero_fuel env' c2 fuel'
+ | While cond body -> if (not (interpret_exp env cond = 0)) then
+                        if fuel = 0 then
+						  () // Result OutOfFuel env fuel
+						else
+							let Result res env' fuel' = interpret_com env body fuel in
+												 if res = OutOfFuel then
+												   out_of_fuel_implies_zero_fuel env body fuel // Result res env' fuel'
+												 else if fuel' = 0 then
+												   () // Result ShouldNotHappen env' fuel'
+												 else if fuel' < fuel then
+												   out_of_fuel_implies_zero_fuel env' com (fuel' - 1)
+												   // interpret_com env' com (fuel' - 1)
+												 else
+												   () // Result ShouldNotHappen env' fuel'
+                      else
+					    () // Result Finished env fuel
 
+
+val fuel_decreases : env:value_env -> com:com -> fuel:nat ->
+  Lemma (requires True)
+        (ensures (Result?.fuel (interpret_com env com fuel) <= fuel))
+let rec fuel_decreases env com fuel = match com with
+ | _ -> admit()
 
 (*
 val ni_seq : lenv:label_env -> env:value_env -> fuel:nat -> c:com{Sequence? c} ->
