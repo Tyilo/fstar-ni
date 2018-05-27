@@ -21,7 +21,7 @@ let rec interpret_exp env exp = match exp with
 type result =
  | Finished : result
  | OutOfFuel : result
- | Error : result
+ | ShouldNotHappen : result
 
 
 noeq type interpret_result =
@@ -49,11 +49,11 @@ let rec interpret_com env com fuel = match com with
 												 if res = OutOfFuel then
 												   Result res env' fuel'
 												 else if fuel' = 0 then
-												   Result Error env' fuel'
+												   Result ShouldNotHappen env' fuel'
 												 else if fuel' < fuel then
 												   interpret_com env' com (fuel' - 1)
 												 else
-												   Result Error env' fuel'
+												   Result ShouldNotHappen env' fuel'
                       else
 					    Result Finished env fuel
 
