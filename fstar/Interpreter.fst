@@ -217,12 +217,39 @@ val ni_seq : lenv:label_env -> com:com{Sequence? com} ->
         (ensures (ni_com lenv com))
 let ni_seq lenv com = assert (forall e1 e2 f1 f2. ni_com' lenv com e1 e2 f1 f2)
 
-(*
-val typed_implies_ni : lenv:label_env -> com:com ->
+
+val ni_typed_exp : lenv:label_env -> exp:exp ->
+  Lemma (requires (label_of_exp lenv exp == Low))
+        (ensures  (ni_exp lenv exp))
+let rec ni_typed_exp lenv exp = match exp with
+ | Int _ -> ()
+ | Var _ -> ()
+ | BinOp left _ right -> ni_typed_exp lenv left; ni_typed_exp lenv right
+
+
+val ni_typed_com : lenv:label_env -> com:com ->
   Lemma (requires (typed_com lenv com Low))
         (ensures (ni_com lenv com))
-let typed_implies_ni _ _ = admit()
-*)
+let rec ni_typed_com lenv com = match com with
+| Skip -> ()
+| Assign v e -> admit()
+| If cond thn els -> if (label_of_exp lenv cond = High) then
+                     (
+                       admit()
+                     )
+                     else
+                     (
+                       assert (label_of_exp lenv cond = Low);
+                       assert (lub Low (label_of_exp lenv cond) = Low);
+                       assert (typed_com lenv thn Low);
+                       assert (typed_com lenv els Low);
+                       ni_typed_com lenv thn;
+                       ni_typed_com lenv els;
+                       assert (typed_com lenv thn Low /\ typed_com lenv els Low);
+                       admit()
+                     )
+| Sequence c1 c2 -> ni_typed_com lenv c1; ni_typed_com lenv c2
+| While cond body -> admit()
 
 
 let _ =
