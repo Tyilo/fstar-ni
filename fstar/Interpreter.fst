@@ -126,7 +126,7 @@ val fuel_decreases : env:value_env -> com:com -> fuel:nat ->
   Lemma (requires True)
         (ensures (Result?.fuel (interpret_com env com fuel) <= fuel))
 let rec fuel_decreases env com fuel = match com with
- | _ -> admit()
+ | _ -> ()
 
 (*
 val ni_seq : lenv:label_env -> env:value_env -> fuel:nat -> c:com{Sequence? c} ->
