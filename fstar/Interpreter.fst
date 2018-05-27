@@ -56,6 +56,23 @@ let rec interpret_com env com fuel = if fuel = 0 then
 							  interpret_com env' com (fuel' - 1)
 
 
+type equiv (e1:value_env) (e2:value_env) =
+  forall (x:var). lookup_env e1 x == lookup_env e2 x
+
+(*
+This lemma ensures that iff two value environments agree on the values of all variables,
+then F* should think of them as being equal.
+
+We need this for proving predicates that rely on (equiv e1 e2) ==> (P(e1, ...) <==> P(e2, ...)).
+
+We can't (?) prove equiv ==> (==), so we use assume.
+The other direction is trivial.
+*)
+val equiv_iff_equal : (e1:value_env) -> (e2:value_env) ->
+  Lemma (equiv e1 e2 <==> e1 == e2)
+        [SMTPat (equiv e1 e2)]
+let equiv_iff_equal e1 e2 = assume (equiv e1 e2 ==> e1 == e2)
+
 type low_equiv (lenv:label_env) (e1:value_env) (e2:value_env) =
   forall (x:var). is_low lenv x ==> lookup_env e1 x == lookup_env e2 x
 
@@ -65,14 +82,27 @@ type ni_exp (lenv:label_env) (exp:exp) =
 type res_equal (lenv:label_env) (r1:interpret_result) (r2:interpret_result) =
   finished r1 /\ finished r2 ==> low_equiv lenv (Result?.env r1) (Result?.env r2)
 
+type ni_com' (lenv:label_env) (com:com) (e1:value_env) (e2:value_env) (fuel1:nat) (fuel2:nat) =
+  low_equiv lenv e1 e2 ==> res_equal lenv (interpret_com e1 com fuel1) (interpret_com e2 com fuel2)
+
 type ni_com (lenv:label_env) (com:com) =
-  forall (e1:value_env) (e2:value_env) (fuel1:nat) (fuel2:nat). low_equiv lenv e1 e2 ==> res_equal lenv (interpret_com e1 com fuel1) (interpret_com e2 com fuel2)
+  forall (e1:value_env) (e2:value_env) (f1:nat) (f2:nat). ni_com' lenv com e1 e2 f1 f2
+
+
+// Properties of types
 
 val low_equiv_symmetric : lenv:label_env -> e1:value_env -> e2:value_env ->
   Lemma (requires (low_equiv lenv e1 e2))
         (ensures  (low_equiv lenv e2 e1))
 let low_equiv_symmetric _ _ _ = ()
 
+val equiv_implies_low_equiv : lenv:label_env -> e1:value_env -> e2:value_env ->
+  Lemma (requires (equiv e1 e2))
+        (ensures  (low_equiv lenv e1 e2))
+let equiv_implies_low_equiv _ _ _ = ()
+
+
+// Expression lemmas
 
 val ni_int : lenv:label_env -> n:int ->
   Lemma (requires True)
@@ -114,37 +144,85 @@ val ni_binop : lenv:label_env -> op:binop -> exp1:exp -> exp2:exp ->
 let ni_binop _ _ _ _ = ()
 
 
-(*
-val ni_seq : lenv:label_env -> c1:com -> c2:com ->
-  lemma (requires (ni_com lenv c1 /\ ni_com lenv c2))
-        (ensures (ni_com lenv (sequence c1 c2)))
-let ni_seq lenv c1 c2 = ()
-*)
+// Command lemmas
+
+val equiv_if_finished : env:value_env -> com:com -> f1:nat -> f2:nat ->
+  Lemma (requires (finished (interpret_com env com f1) /\ finished (interpret_com env com f2)))
+        (ensures (equiv
+		           (Result?.env (interpret_com env com f1))
+				   (Result?.env (interpret_com env com f2))))
+let rec equiv_if_finished env com f1 f2 = match com with
+ | Skip -> ()
+ | Assign var exp -> ()
+ | If cond thn els -> if (not (interpret_exp env cond = 0)) then
+                        equiv_if_finished env thn f1 f2
+					  else
+                        equiv_if_finished env els f1 f2
+ | Sequence c1 c2 -> let r1 = interpret_com env c1 f1 in
+                     let r2 = interpret_com env c1 f2 in
+					 let Result e1 f1' = r1 in
+					 let Result e2 f2' = r2 in
+					   if out_of_fuel r1 || out_of_fuel r2 then
+					     ()
+					   else
+					   (
+					     equiv_if_finished env c1 f1 f2;
+					     // assert (equiv e1 e2);
+						 // assert (finished r1);
+						 // assert (finished r2);
+					     equiv_if_finished e1 c2 f1' f2'
+					   )
+ | While cond body -> if (interpret_exp env cond = 0) then
+                        ()
+					  else
+                        let r1 = interpret_com env body f1 in
+                        let r2 = interpret_com env body f2 in
+					    let Result e1 f1' = r1 in
+					    let Result e2 f2' = r2 in
+							if out_of_fuel r1 || out_of_fuel r2 then
+							  ()
+							else
+							(
+							  equiv_if_finished env body f1 f2;
+							  equiv_if_finished e1 com (f1' - 1) (f2' - 1)
+							)
 
 
-val fuel_decreases : env:value_env -> com:com -> fuel:nat ->
+val ni_different_fuel : lenv:label_env -> env:value_env -> com:com -> f1:nat -> f2:nat ->
   Lemma (requires True)
-        (ensures (Result?.fuel (interpret_com env com fuel) <= fuel))
-let rec fuel_decreases env com fuel = match com with
- | _ -> ()
+        (ensures (res_equal lenv (interpret_com env com f1) (interpret_com env com f2)))
+let ni_different_fuel _ env com f1 f2 =
+  let r1 = interpret_com env com f1 in
+  let r2 = interpret_com env com f2 in
+  match (finished r1), (finished r2) with
+  | true, true -> equiv_if_finished env com f1 f2
+  | _, _ -> ()
+
+
+val ni_seq' : lenv:label_env -> com:com{Sequence? com} -> e1:value_env -> e2:value_env -> f1:nat -> f2:nat ->
+  Lemma (requires (ni_com lenv (Sequence?.s1 com) /\ ni_com lenv (Sequence?.s2 com) /\ low_equiv lenv e1 e2))
+        (ensures (ni_com' lenv com e1 e2 f1 f2))
+        [SMTPat (ni_com' lenv com e1 e2 f1 f2)]
+let ni_seq' lenv com e1 e2 f1 f2 = match com with
+ | Sequence c1 c2 -> let r1 = interpret_com e1 c1 f1 in
+                     let r2 = interpret_com e2 c1 f2 in
+                     let Result e1' f1' = r1 in
+                     let Result e2' f2' = r2 in
+                     assert (ni_com' lenv c1 e1 e2 f1 f2);
+                     assert (ni_com' lenv c2 e1' e2' f1' f2')
+
+
+val ni_seq : lenv:label_env -> com:com{Sequence? com} ->
+  Lemma (requires (ni_com lenv (Sequence?.s1 com) /\ ni_com lenv (Sequence?.s2 com)))
+        (ensures (ni_com lenv com))
+let ni_seq lenv com = assert (forall e1 e2 f1 f2. ni_com' lenv com e1 e2 f1 f2)
 
 (*
-val ni_seq : lenv:label_env -> env:value_env -> fuel:nat -> c:com{Sequence? c} ->
-  Lemma (requires (ni_com lenv (Sequence?.s1 c) /\ ni_com lenv (Sequence?.s2 c)))
-        (ensures (ni_com lenv c))
-let ni_seq lenv env fuel c = match c with
-  | Sequence c1 c2 -> let r1 = interpret_com env fuel in
-                      let r2 = interpret_com env
-  assert (ni_com lenv c1);
-      assert (forall e1:value_env e2:value_env. interpret_exp lenv
-    assert (ni_com lenv c2);
-*)
-
-
 val typed_implies_ni : lenv:label_env -> com:com ->
   Lemma (requires (typed_com lenv com Low))
         (ensures (ni_com lenv com))
 let typed_implies_ni _ _ = admit()
+*)
 
 
 let _ =
@@ -176,6 +254,7 @@ let _ =
 	assert (ni_com lenv Skip);
 	assert (ni_com lenv (Assign "lo" exp));
 
+    (*
 	let not_ni_com = Assign "lo" (Var "hi") in
 	let env0 = make_env 0 [("lo", 0); ("hi", 0)] in
 	let env1 = make_env 0 [("lo", 0); ("hi", 1)] in
@@ -195,9 +274,14 @@ let _ =
 	assert (~ (res_equal lenv r0 r1));
 
 	assert (~ (ni_com lenv not_ni_com));
+    *)
 
 	let seq_com = (Sequence (Assign "hi" (Var "lo")) (Assign "lo" (Var "hi"))) in
 
 	assert (ni_com lenv seq_com);
+
+	let if_com = (If (Var "hi") (Assign "lo" (Var "lo2")) (Assign "lo" (Var "lo2"))) in
+
+	assert (ni_com lenv if_com);
 
 	()
