@@ -18,44 +18,42 @@ let rec interpret_exp env exp = match exp with
 	  | Times -> op_Multiply vleft vright
 
 
-type result =
- | Finished : result
- | OutOfFuel : result
- | ShouldNotHappen : result
-
-
 noeq type interpret_result =
- | Result : result:result -> env:value_env -> fuel:nat -> interpret_result
+ | Result : env:value_env -> fuel:nat -> interpret_result
 
 
-val interpret_com : value_env -> com -> nat -> interpret_result
-let rec interpret_com env com fuel = match com with
- | Skip -> Result Finished env fuel
- | Assign var exp -> Result Finished (update_env env var (interpret_exp env exp)) fuel
- | Sequence c1 c2 -> let Result res env' fuel' = interpret_com env c1 fuel in
-                                              if res = OutOfFuel then
-											    Result res env' fuel'
-											  else
-												interpret_com env' c2 fuel'
+val out_of_fuel : interpret_result -> bool
+let out_of_fuel res = let Result _ fuel = res in fuel = 0
+
+val finished : interpret_result -> bool
+let finished res = not (out_of_fuel res)
+
+
+val interpret_com : value_env -> com -> fuel:nat -> res:interpret_result{Result?.fuel res <= fuel}
+let rec interpret_com env com fuel = if fuel = 0 then
+    Result env fuel
+  else match com with
+ | Skip -> Result env fuel
+ | Assign var exp -> Result (update_env env var (interpret_exp env exp)) fuel
  | If cond thn els -> if (not (interpret_exp env cond = 0)) then
                         interpret_com env thn fuel
 					  else
                         interpret_com env els fuel
- | While cond body -> if (not (interpret_exp env cond = 0)) then
-                        if fuel = 0 then
-						  Result OutOfFuel env fuel
-						else
-							let Result res env' fuel' = interpret_com env body fuel in
-												 if res = OutOfFuel then
-												   Result res env' fuel'
-												 else if fuel' = 0 then
-												   Result ShouldNotHappen env' fuel'
-												 else if fuel' < fuel then
-												   interpret_com env' com (fuel' - 1)
-												 else
-												   Result ShouldNotHappen env' fuel'
-                      else
-					    Result Finished env fuel
+ | Sequence c1 c2 -> let res = interpret_com env c1 fuel in
+                     let Result env' fuel' = res in
+					   if out_of_fuel res then
+					     res
+					   else
+						 interpret_com env' c2 fuel'
+ | While cond body -> if (interpret_exp env cond = 0) then
+                        Result env fuel
+					  else
+					    let res = interpret_com env body fuel in
+						let Result env' fuel' = res in
+							if out_of_fuel res then
+							  res
+							else
+							  interpret_com env' com (fuel' - 1)
 
 
 type low_equiv (lenv:label_env) (e1:value_env) (e2:value_env) =
@@ -65,7 +63,7 @@ type ni_exp (lenv:label_env) (exp:exp) =
   forall (e1:value_env) (e2:value_env). low_equiv lenv e1 e2 ==> interpret_exp e1 exp == interpret_exp e2 exp
 
 type res_equal (lenv:label_env) (r1:interpret_result) (r2:interpret_result) =
-  Result?.result r1 == Finished /\ Result?.result r2 == Finished ==> low_equiv lenv (Result?.env r1) (Result?.env r2)
+  finished r1 /\ finished r2 ==> low_equiv lenv (Result?.env r1) (Result?.env r2)
 
 type ni_com (lenv:label_env) (com:com) =
   forall (e1:value_env) (e2:value_env) (fuel1:nat) (fuel2:nat). low_equiv lenv e1 e2 ==> res_equal lenv (interpret_com e1 com fuel1) (interpret_com e2 com fuel2)
@@ -122,39 +120,6 @@ val ni_seq : lenv:label_env -> c1:com -> c2:com ->
         (ensures (ni_com lenv (sequence c1 c2)))
 let ni_seq lenv c1 c2 = ()
 *)
-
-val out_of_fuel_implies_zero_fuel : env:value_env -> com:com -> fuel:nat ->
-  Lemma (requires (Result?.result (interpret_com env com fuel) = OutOfFuel))
-        (ensures (Result?.fuel (interpret_com env com fuel) = 0))
-let rec out_of_fuel_implies_zero_fuel env com fuel = match com with
- | Skip -> ()
- | Assign _ _ -> ()
- | If cond thn els ->
-					  if (not (interpret_exp env cond = 0)) then
-                        out_of_fuel_implies_zero_fuel env thn fuel
-					  else
-                        out_of_fuel_implies_zero_fuel env els fuel
- | Sequence c1 c2 -> let Result res env' fuel' = interpret_com env c1 fuel in
-                                              if res = OutOfFuel then
-												out_of_fuel_implies_zero_fuel env c1 fuel
-											  else
-												out_of_fuel_implies_zero_fuel env' c2 fuel'
- | While cond body -> if (not (interpret_exp env cond = 0)) then
-                        if fuel = 0 then
-						  () // Result OutOfFuel env fuel
-						else
-							let Result res env' fuel' = interpret_com env body fuel in
-												 if res = OutOfFuel then
-												   out_of_fuel_implies_zero_fuel env body fuel // Result res env' fuel'
-												 else if fuel' = 0 then
-												   () // Result ShouldNotHappen env' fuel'
-												 else if fuel' < fuel then
-												   out_of_fuel_implies_zero_fuel env' com (fuel' - 1)
-												   // interpret_com env' com (fuel' - 1)
-												 else
-												   () // Result ShouldNotHappen env' fuel'
-                      else
-					    () // Result Finished env fuel
 
 
 val fuel_decreases : env:value_env -> com:com -> fuel:nat ->
@@ -220,8 +185,8 @@ let _ =
 	let r0 = interpret_com env0 not_ni_com 1 in
 	let r1 = interpret_com env1 not_ni_com 1 in
 
-	assert (Result?.result r0 = Finished);
-	assert (Result?.result r1 = Finished);
+	assert (finished r0);
+	assert (finished r1);
 
 	assert (lookup_env (Result?.env r0) "lo" = 0);
 	assert (lookup_env (Result?.env r1) "lo" = 1);
