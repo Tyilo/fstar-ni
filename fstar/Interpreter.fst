@@ -204,10 +204,8 @@ val ni_seq' : lenv:label_env -> com:com{Sequence? com} -> e1:value_env -> e2:val
         (ensures (ni_com' lenv com e1 e2 f1 f2))
         [SMTPat (ni_com' lenv com e1 e2 f1 f2)]
 let ni_seq' lenv com e1 e2 f1 f2 = match com with
- | Sequence c1 c2 -> let r1 = interpret_com e1 c1 f1 in
-                     let r2 = interpret_com e2 c1 f2 in
-                     let Result e1' f1' = r1 in
-                     let Result e2' f2' = r2 in
+ | Sequence c1 c2 -> let Result e1' f1' = interpret_com e1 c1 f1 in
+                     let Result e2' f2' = interpret_com e2 c1 f2 in
                      assert (ni_com' lenv c1 e1 e2 f1 f2);
                      assert (ni_com' lenv c2 e1' e2' f1' f2')
 
