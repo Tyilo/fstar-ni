@@ -1,7 +1,8 @@
 module Env
 
-//include EnvFun
-include EnvSortedList
+// include EnvSortedList
+include EnvFun
+
 open Label
 
 val make_env : 'a -> list (var * 'a) -> env 'a
