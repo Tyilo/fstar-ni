@@ -79,6 +79,9 @@ type low_equiv (lenv:label_env) (e1:value_env) (e2:value_env) =
 type ni_exp (lenv:label_env) (exp:exp) =
   forall (e1:value_env) (e2:value_env). low_equiv lenv e1 e2 ==> interpret_exp e1 exp == interpret_exp e2 exp
 
+type res_equal' (lenv:label_env) (e:value_env) (r:interpret_result) =
+  finished r ==> low_equiv lenv e (Result?.env r)
+
 type res_equal (lenv:label_env) (r1:interpret_result) (r2:interpret_result) =
   finished r1 /\ finished r2 ==> low_equiv lenv (Result?.env r1) (Result?.env r2)
 
@@ -87,6 +90,12 @@ type ni_com' (lenv:label_env) (com:com) (e1:value_env) (e2:value_env) (fuel1:nat
 
 type ni_com (lenv:label_env) (com:com) =
   forall (e1:value_env) (e2:value_env) (f1:nat) (f2:nat). ni_com' lenv com e1 e2 f1 f2
+
+type ni_com2' (lenv:label_env) (c1:com) (c2:com) (e1:value_env) (e2:value_env) (f1:nat) (f2:nat) =
+  low_equiv lenv e1 e2 ==> res_equal lenv (interpret_com e1 c1 f1) (interpret_com e2 c2 f2)
+
+type ni_com2 (lenv:label_env) (c1:com) (c2:com) =
+  forall (e1:value_env) (e2:value_env) (f1:nat) (f2:nat). ni_com2' lenv c1 c2 e1 e2 f1 f2
 
 
 // Properties of types
@@ -216,6 +225,31 @@ val ni_seq : lenv:label_env -> com:com{Sequence? com} ->
 let ni_seq lenv com = assert (forall e1 e2 f1 f2. ni_com' lenv com e1 e2 f1 f2)
 
 
+val ni_if' : lenv:label_env -> com:com{If? com} -> e1:value_env -> e2:value_env -> f1:nat -> f2:nat ->
+  Lemma (requires (ni_exp lenv (If?.cond com) /\ ni_com lenv (If?.thn com) /\ ni_com lenv (If?.els com) /\ low_equiv lenv e1 e2))
+        (ensures (ni_com' lenv com e1 e2 f1 f2))
+        [SMTPat (ni_com' lenv com e1 e2 f1 f2)]
+let ni_if' lenv com e1 e2 f1 f2 = match com with
+ | If cond thn els -> let b1 = interpret_exp e1 cond in
+                      let b2 = interpret_exp e2 cond in
+                      assert (b1 == b2);
+                      if b1 <> 0 then
+                      (
+                        assert (ni_com' lenv thn e1 e2 f1 f2)
+                      )
+                      else
+                      (
+                        assert (ni_com' lenv els e1 e2 f1 f2)
+                      )
+
+
+val ni_if : lenv:label_env -> com:com{If? com} ->
+  Lemma (requires (ni_exp lenv (If?.cond com) /\ ni_com lenv (If?.thn com) /\ ni_com lenv (If?.els com)))
+        (ensures (ni_com lenv com))
+let ni_if lenv com = assert (forall e1 e2 f1 f2. ni_com' lenv com e1 e2 f1 f2)
+
+
+
 val ni_typed_exp : lenv:label_env -> exp:exp ->
   Lemma (requires (label_of_exp lenv exp == Low))
         (ensures  (ni_exp lenv exp))
@@ -225,125 +259,128 @@ let rec ni_typed_exp lenv exp = match exp with
  | BinOp left _ right -> ni_typed_exp lenv left; ni_typed_exp lenv right
 
 
-val ni_typed_com_high_2 : lenv:label_env -> c1:com -> c2:com -> e1:value_env -> e2:value_env -> f1:nat -> f2:nat ->
-  Lemma (requires (typed_com lenv c1 High /\ typed_com lenv c2 High /\ low_equiv lenv e1 e2))
-        (ensures (res_equal lenv (interpret_com e1 c1 f1) (interpret_com e2 c2 f2)))
-let rec ni_typed_com_high_2 lenv c1 c2 e1 e2 f1 f2 = match c1 with
- | Skip -> admit()
- | Assign v e -> admit()
- | If cond thn els -> admit()
- | Sequence c1 c2 -> admit()
- | While cond body -> admit()
+let rec has_low_assign lenv com = match com with
+ | Skip -> false
+ | Assign v e -> lookup_env lenv v = Low
+ | Sequence c1 c2 -> has_low_assign lenv c1 || has_low_assign lenv c2
+ | If cond thn els -> has_low_assign lenv thn || has_low_assign lenv els
+ | While cond body -> has_low_assign lenv body
 
 
-val ni_typed_if_high' : lenv:label_env -> cond:exp -> thn:com -> els:com -> e1:value_env -> e2:value_env -> f1:nat -> f2:nat ->
-  Lemma (requires (typed_com lenv thn High /\ typed_com lenv els High /\ low_equiv lenv e1 e2))
-        (ensures (ni_com' lenv (If cond thn els) e1 e2 f1 f2))
-let rec ni_typed_if_high' lenv cond thn els e1 e2 f1 f2 =
-  let rthn1 = interpret_com e1 thn f1 in
-  let rthn2 = interpret_com e2 thn f2 in
-  let rels1 = interpret_com e1 els f1 in
-  let rels2 = interpret_com e2 els f2 in
-    assert (res_equal lenv rthn1 rthn2);
-    assert (res_equal lenv rels1 rels2);
-    assert (res_equal lenv rthn1 rels1)
+val typed_assign_high : lenv:label_env -> com:com ->
+  Lemma (requires (typed_com lenv com High))
+        (ensures (~ (has_low_assign lenv com)))
 
 
-val ni_typed_com_high' : lenv:label_env -> com:com -> e1:value_env -> e2:value_env -> f1:nat -> f2:nat ->
-  Lemma (requires (typed_com lenv com High /\ low_equiv lenv e1 e2))
-        (ensures ni_com' lenv com e1 e2 f1 f2)
-        [SMTPat (ni_com' lenv com e1 e2 f1 f2)]
-let rec ni_typed_com_high' lenv com e1 e2 f1 f2 = match com with
+val no_low_assign_preserves_low_equiv : lenv:label_env -> com:com -> e:value_env -> f:nat ->
+  Lemma (requires (~ (has_low_assign lenv com)))
+        (ensures (res_equal' lenv e (interpret_com e com f)))
+        [SMTPat (res_equal' lenv e (interpret_com e com f))]
+let rec no_low_assign_preserves_low_equiv lenv com e f = match com with
  | Skip -> ()
  | Assign v e -> ()
- | If cond thn els -> //ni_typed_exp lenv cond;
+ | Sequence c1 c2 -> no_low_assign_preserves_low_equiv lenv c1 e f;
+                     let Result e' f' = interpret_com e c1 f in
+                     no_low_assign_preserves_low_equiv lenv c2 e' f'
 
-(
-                      match (not (interpret_exp e1 cond = 0)), (not (interpret_exp e2 cond = 0)) with
-                       | true, true -> ni_typed_com_high' lenv thn e1 e2 f1 f2
-                       | false, false -> ni_typed_com_high' lenv els e1 e2 f1 f2
-                       | true, false -> ni_typed_com_high_2 lenv thn els e1 e2 f1 f2
-                       | false, true -> ni_typed_com_high_2 lenv els thn e1 e2 f1 f2
-                      )
+ | If cond thn els -> no_low_assign_preserves_low_equiv lenv thn e f;
+                      no_low_assign_preserves_low_equiv lenv els e f
 
-                      //assert (ni_com' lenv com e1 e2 f1 f2);
- | Sequence c1 c2 -> admit()
- | While cond body -> admit()
-
-
-val ni_typed_com' : lenv:label_env -> com:com -> e1:value_env -> e2:value_env -> f1:nat -> f2:nat ->
-  Lemma (requires (typed_com lenv com Low) /\ low_equiv lenv e1 e2)
-        (ensures ni_com' lenv com e1 e2 f1 f2)
-        [SMTPat (ni_com' lenv com e1 e2 f1 f2)]
-let rec ni_typed_com' lenv com e1 e2 f1 f2 = match com with
- | Skip -> ()
- | Assign v e -> if (lookup_env lenv v = Low) then
-                   ni_typed_exp lenv e
- | If cond thn els -> if (label_of_exp lenv cond = High) then
-                      (
-                        assert (lub Low (label_of_exp lenv cond) = High);
-                        assert (typed_com lenv thn High);
-                        assert (typed_com lenv els High);
-                        ();
-                        ni_different_fuel lenv e1 thn f1 f2;
-                        ni_different_fuel lenv e2 thn f1 f2;
-                        ni_different_fuel lenv e1 els f1 f2;
-                        ni_different_fuel lenv e2 els f1 f2;
-                        ni_typed_com_high' lenv com e1 e2 f1 f2
-                      )
+ | While cond body -> let b = (interpret_exp e cond = 0) in
+                      if b then
+                        ()
                       else
-                      (
-                        ni_typed_exp lenv cond;
-                        ni_typed_com' lenv thn e1 e2 f1 f2;
-                        ni_typed_com' lenv els e1 e2 f1 f2
-                      )
- | Sequence c1 c2 -> ni_typed_com' lenv c1 e1 e2 f1 f2;
-                     ni_typed_com' lenv c2 e1 e2 f1 f2;
-                     assert (c1 = Sequence?.s1 com);
-                     assert (c2 = Sequence?.s2 com);
+                        no_low_assign_preserves_low_equiv lenv body e f;
+                        let Result e' f' = interpret_com e body f in
+                        if f' = 0 then
+                          ()
+                        else
+                          no_low_assign_preserves_low_equiv lenv com e' (f' - 1)
 
-                     assert (ni_com' lenv c1 e1 e2 f1 f2);
-                     //assert (ni_com lenv c2);
 
-                     admit()
- | While cond body -> admit()
+val ni_typed_assign : lenv:label_env -> com:com ->
+  Lemma (requires (~ (has_low_assign lenv com)))
+        (ensures (ni_com lenv com))
+
+
+let rec typed_assign_high lenv com = match com with
+ | Skip -> ()
+ | Assign v e -> ()
+ | Sequence c1 c2 -> typed_assign_high lenv c1;
+                     typed_assign_high lenv c2
+ | If cond thn els -> typed_assign_high lenv thn;
+                      typed_assign_high lenv els
+ | While cond body -> typed_assign_high lenv body
+
+
+let ni_typed_assign lenv com = assert (forall e f. res_equal' lenv e (interpret_com e com f))
+
+
+val ni_typed_com_while : lenv:label_env -> com:com{While? com} -> e1:value_env -> e2:value_env -> f1:nat -> f2:nat ->
+  Lemma (requires (typed_com lenv com Low /\ ni_exp lenv (While?.cond com)
+                                          /\ ni_com lenv (While?.body com)
+                                          /\ low_equiv lenv e1 e2))
+        (ensures (ni_com' lenv com e1 e2 f1 f2))
+        [SMTPat (ni_com' lenv com e1 e2 f1 f2)]
+
+
+let rec ni_typed_com_while lenv com e1 e2 f1 f2 = match com with
+ | While cond body -> let b1 = interpret_exp e1 cond in
+                      let b2 = interpret_exp e2 cond in
+                      assert (b1 == b2);
+                      if b1 = 0 then
+                        ()
+					  else
+                        let r1 = interpret_com e1 body f1 in
+                        let r2 = interpret_com e2 body f2 in
+					    let Result e1' f1' = r1 in
+					    let Result e2' f2' = r2 in
+							if out_of_fuel r1 || out_of_fuel r2 then
+							  ()
+							else
+							(
+                              assert (ni_com' lenv body e1 e2 f1 f2);
+                              ni_typed_com_while lenv com e1' e2' (f1' - 1) (f2' - 1)
+							)
 
 
 val ni_typed_com : lenv:label_env -> com:com ->
   Lemma (requires (typed_com lenv com Low))
         (ensures (ni_com lenv com))
+
+
 let rec ni_typed_com lenv com = match com with
 | Skip -> ()
-| Assign v e -> ()
+| Assign v e -> if label_of_exp lenv e = Low then
+                  ni_typed_exp lenv e
 | If cond thn els -> if (label_of_exp lenv cond = High) then
                      (
-                       admit()
+                       typed_assign_high lenv com;
+                       ni_typed_assign lenv com
                      )
                      else
                      (
-                       assert (label_of_exp lenv cond = Low);
-                       assert (lub Low (label_of_exp lenv cond) = Low);
-                       assert (typed_com lenv thn Low);
-                       assert (typed_com lenv els Low);
-                       ni_typed_com lenv thn;
-                       ni_typed_com lenv els;
-                       assert (typed_com lenv thn Low /\ typed_com lenv els Low);
-                       assert (ni_com lenv thn);
-                       assert (ni_com lenv els);
                        ni_typed_exp lenv cond;
-                       assert (forall e1 e2. low_equiv lenv e1 e2 ==> interpret_exp e1 cond = interpret_exp e2 cond);
-
-                       assert (forall e1 e2 f1 f2. ni_com' lenv thn e1 e2 f1 f2);
-
-                       //assert (forall e1 e2 f1 f2. low_equiv lenv e1 e2 ==> res_equal lenv (interpret_com e1 thn f1) (interpret_com e2 thn f2));
-
-                       //assert (forall e1 e2 f1 f2. ni_com' lenv com e1 e2 f1 f2);
-                       assert (forall e1 e2 f1 f2. ni_com' lenv thn e1 e2 f1 f2);
-                       ()
+                       ni_typed_com lenv thn;
+                       ni_typed_com lenv els
                      )
-| Sequence c1 c2 -> ni_typed_com lenv c1; ni_typed_com lenv c2
-| While cond body -> admit()
-
+| Sequence c1 c2 -> ni_typed_com lenv c1; ni_typed_com lenv c2; ni_seq lenv com
+| While cond body -> if (label_of_exp lenv cond = High) then
+                     (
+                       typed_assign_high lenv com;
+                       ni_typed_assign lenv com
+                     )
+                     else
+                     (
+                       ni_typed_exp lenv cond;
+                       ni_typed_com lenv body;
+                       assert (typed_com lenv com Low);
+                       assert (ni_exp lenv cond);
+                       assert (ni_com lenv body);
+                       assert (cond == While?.cond com);
+                       assert (body == While?.body com);
+                       assert (forall e1 e2 f1 f2. ni_com' lenv com e1 e2 f1 f2)
+                     )
 
 let _ =
 	let lenv = make_env Low [("lo", Low); ("lo2", Low); ("hi", High)] in
