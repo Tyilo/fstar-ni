@@ -29,7 +29,7 @@ val finished : interpret_result -> bool
 let finished res = not (out_of_fuel res)
 
 
-val interpret_com : value_env -> com -> fuel:nat -> Tot (res:interpret_result{Result?.fuel res <= fuel})
+val interpret_com : value_env -> com -> fuel:nat -> res:interpret_result{Result?.fuel res <= fuel}
 let rec interpret_com env com fuel = if fuel = 0 then
     Result env fuel
   else match com with
