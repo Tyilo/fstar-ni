@@ -230,7 +230,9 @@ val ni_typed_com : lenv:label_env -> com:com ->
         (ensures (ni_com lenv com))
 let rec ni_typed_com lenv com = match com with
 | Skip -> ()
-| Assign v e -> admit()
+| Assign v e -> if label_of_exp lenv e = Low then
+                  ni_typed_exp lenv e
+                else ()
 | If cond thn els -> if (label_of_exp lenv cond = High) then
                      (
                        admit()
