@@ -290,6 +290,19 @@ let rec has_low_assign lenv com = match com with
  | While cond body -> has_low_assign lenv body
 
 
+val typed_assign_high : lenv:label_env -> com:com ->
+  Lemma (requires (typed_com lenv com High))
+        (ensures (~ (has_low_assign lenv com)))
+let rec typed_assign_high lenv com = match com with
+ | Skip -> ()
+ | Assign v e -> ()
+ | Sequence c1 c2 -> typed_assign_high lenv c1;
+                     typed_assign_high lenv c2
+ | If cond thn els -> typed_assign_high lenv thn;
+                      typed_assign_high lenv els
+ | While cond body -> typed_assign_high lenv body
+
+
 val no_low_assign_preserves_low_equiv : lenv:label_env -> com:com -> e:value_env -> f:nat ->
   Lemma (requires (~ (has_low_assign lenv com)))
         (ensures (res_equal' lenv e (interpret_com e com f)))
@@ -314,19 +327,6 @@ let rec no_low_assign_preserves_low_equiv lenv com e f = match com with
                           ()
                         else
                           no_low_assign_preserves_low_equiv lenv com e' (f' - 1)
-
-
-val typed_assign_high : lenv:label_env -> com:com ->
-  Lemma (requires (typed_com lenv com High))
-        (ensures (~ (has_low_assign lenv com)))
-let rec typed_assign_high lenv com = match com with
- | Skip -> ()
- | Assign v e -> ()
- | Sequence c1 c2 -> typed_assign_high lenv c1;
-                     typed_assign_high lenv c2
- | If cond thn els -> typed_assign_high lenv thn;
-                      typed_assign_high lenv els
- | While cond body -> typed_assign_high lenv body
 
 
 val ni_typed_assign : lenv:label_env -> com:com ->
