@@ -250,6 +250,37 @@ val ni_if : lenv:label_env -> com:com{If? com} ->
 let ni_if lenv com = assert (forall e1 e2 f1 f2. ni_com' lenv com e1 e2 f1 f2)
 
 
+val ni_while': lenv:label_env -> com:com{While? com} -> e1:value_env -> e2:value_env -> f1:nat -> f2:nat ->
+  Lemma (requires (ni_exp lenv (While?.cond com)
+                                          /\ ni_com lenv (While?.body com)
+                                          /\ low_equiv lenv e1 e2))
+        (ensures (ni_com' lenv com e1 e2 f1 f2))
+        [SMTPat (ni_com' lenv com e1 e2 f1 f2)]
+let rec ni_while' lenv com e1 e2 f1 f2 = match com with
+ | While cond body -> let b1 = interpret_exp e1 cond in
+                      let b2 = interpret_exp e2 cond in
+                      assert (b1 == b2);
+                      if b1 = 0 then
+                        ()
+					  else
+                        let r1 = interpret_com e1 body f1 in
+                        let r2 = interpret_com e2 body f2 in
+					    let Result e1' f1' = r1 in
+					    let Result e2' f2' = r2 in
+							if out_of_fuel r1 || out_of_fuel r2 then
+							  ()
+							else
+							(
+                              assert (ni_com' lenv body e1 e2 f1 f2);
+                              ni_while' lenv com e1' e2' (f1' - 1) (f2' - 1)
+							)
+
+
+val ni_while: lenv:label_env -> com:com{While? com} ->
+  Lemma (requires (ni_exp lenv (While?.cond com) /\ ni_com lenv (While?.body com)))
+        (ensures (ni_com lenv com))
+let ni_while lenv com = assert (forall e1 e2 f1 f2. ni_com' lenv com e1 e2 f1 f2)
+
 
 let rec has_low_assign lenv com = match com with
  | Skip -> false
@@ -304,34 +335,6 @@ val ni_typed_assign : lenv:label_env -> com:com ->
 let ni_typed_assign lenv com = assert (forall e f. res_equal' lenv e (interpret_com e com f))
 
 
-val ni_typed_com_while : lenv:label_env -> com:com{While? com} -> e1:value_env -> e2:value_env -> f1:nat -> f2:nat ->
-  Lemma (requires (typed_com lenv com Low /\ ni_exp lenv (While?.cond com)
-                                          /\ ni_com lenv (While?.body com)
-                                          /\ low_equiv lenv e1 e2))
-        (ensures (ni_com' lenv com e1 e2 f1 f2))
-        [SMTPat (ni_com' lenv com e1 e2 f1 f2)]
-
-
-let rec ni_typed_com_while lenv com e1 e2 f1 f2 = match com with
- | While cond body -> let b1 = interpret_exp e1 cond in
-                      let b2 = interpret_exp e2 cond in
-                      assert (b1 == b2);
-                      if b1 = 0 then
-                        ()
-					  else
-                        let r1 = interpret_com e1 body f1 in
-                        let r2 = interpret_com e2 body f2 in
-					    let Result e1' f1' = r1 in
-					    let Result e2' f2' = r2 in
-							if out_of_fuel r1 || out_of_fuel r2 then
-							  ()
-							else
-							(
-                              assert (ni_com' lenv body e1 e2 f1 f2);
-                              ni_typed_com_while lenv com e1' e2' (f1' - 1) (f2' - 1)
-							)
-
-
 val ni_typed_com : lenv:label_env -> com:com ->
   Lemma (requires (typed_com lenv com Low))
         (ensures (ni_com lenv com))
@@ -348,7 +351,8 @@ let rec ni_typed_com lenv com = match com with
                      (
                        ni_typed_exp lenv cond;
                        ni_typed_com lenv thn;
-                       ni_typed_com lenv els
+                       ni_typed_com lenv els;
+                       ni_if lenv com
                      )
 | Sequence c1 c2 -> ni_typed_com lenv c1; ni_typed_com lenv c2; ni_seq lenv com
 | While cond body -> if (label_of_exp lenv cond = High) then
@@ -360,12 +364,7 @@ let rec ni_typed_com lenv com = match com with
                      (
                        ni_typed_exp lenv cond;
                        ni_typed_com lenv body;
-                       assert (typed_com lenv com Low);
-                       assert (ni_exp lenv cond);
-                       assert (ni_com lenv body);
-                       assert (cond == While?.cond com);
-                       assert (body == While?.body com);
-                       assert (forall e1 e2 f1 f2. ni_com' lenv com e1 e2 f1 f2)
+                       ni_while lenv com
                      )
 
 let _ =
