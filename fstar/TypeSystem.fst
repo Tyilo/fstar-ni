@@ -21,12 +21,6 @@ let rec typed_com lenv com pc_label = match com with
  | While cond body -> typed_com lenv body (lub pc_label (label_of_exp lenv cond))
 
 
-val seq : list com -> com
-let rec seq ss = match ss with
- | [] -> Skip
- | hd :: tl -> Sequence hd (seq tl)
-
-
 let _ =
 	let lenv = make_env Low [("lo", Low); ("hi", High)] in
 	let prog_test = seq [
