@@ -146,6 +146,13 @@ val ni_binop : lenv:label_env -> op:binop -> exp1:exp -> exp2:exp ->
         (ensures (ni_exp lenv (BinOp exp1 op exp2)))
 let ni_binop _ _ _ _ = ()
 
+val ni_typed_exp : lenv:label_env -> exp:exp ->
+  Lemma (requires (label_of_exp lenv exp == Low))
+        (ensures  (ni_exp lenv exp))
+let rec ni_typed_exp lenv exp = match exp with
+ | Int _ -> ()
+ | Var _ -> ()
+ | BinOp left _ right -> ni_typed_exp lenv left; ni_typed_exp lenv right
 
 // Command lemmas
 
@@ -242,15 +249,6 @@ val ni_if : lenv:label_env -> com:com{If? com} ->
         (ensures (ni_com lenv com))
 let ni_if lenv com = assert (forall e1 e2 f1 f2. ni_com' lenv com e1 e2 f1 f2)
 
-
-
-val ni_typed_exp : lenv:label_env -> exp:exp ->
-  Lemma (requires (label_of_exp lenv exp == Low))
-        (ensures  (ni_exp lenv exp))
-let rec ni_typed_exp lenv exp = match exp with
- | Int _ -> ()
- | Var _ -> ()
- | BinOp left _ right -> ni_typed_exp lenv left; ni_typed_exp lenv right
 
 
 let rec has_low_assign lenv com = match com with
