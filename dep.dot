@@ -1,0 +1,12 @@
+digraph dep {
+	"ni_seq" -> "ni_seq'";
+	"ni_if" -> "ni_if'";
+	"ni_while" -> "ni_while'";
+	"ni_typed_assign" -> "no_low_assign_preserves_low_equiv";
+	"ni_typed_com" -> "ni_typed_exp";
+	"ni_typed_com" -> "ni_if";
+	"ni_typed_com" -> "ni_seq";
+	"ni_typed_com" -> "ni_while";
+	"ni_typed_com" -> "typed_assign_high";
+	"ni_typed_com" -> "ni_typed_assign";
+}
