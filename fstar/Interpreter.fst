@@ -15,7 +15,7 @@ let rec interpret_exp env exp = match exp with
      match op with
       | Plus -> vleft + vright
 	  | Minus -> vleft - vright
-	  | Times -> op_Multiply vleft vright
+	  | Times -> vleft `op_Multiply` vright
 
 
 noeq type interpret_result =
