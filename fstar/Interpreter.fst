@@ -91,12 +91,6 @@ type ni_com' (lenv:label_env) (com:com) (e1:value_env) (e2:value_env) (fuel1:nat
 type ni_com (lenv:label_env) (com:com) =
   forall (e1:value_env) (e2:value_env) (f1:nat) (f2:nat). ni_com' lenv com e1 e2 f1 f2
 
-type ni_com2' (lenv:label_env) (c1:com) (c2:com) (e1:value_env) (e2:value_env) (f1:nat) (f2:nat) =
-  low_equiv lenv e1 e2 ==> res_equal lenv (interpret_com e1 c1 f1) (interpret_com e2 c2 f2)
-
-type ni_com2 (lenv:label_env) (c1:com) (c2:com) =
-  forall (e1:value_env) (e2:value_env) (f1:nat) (f2:nat). ni_com2' lenv c1 c2 e1 e2 f1 f2
-
 
 // Properties of types
 
