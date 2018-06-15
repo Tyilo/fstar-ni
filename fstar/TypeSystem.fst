@@ -14,11 +14,7 @@ let rec label_of_exp lenv e = match e with
 val typed_com : label_env -> com -> label -> bool
 let rec typed_com lenv com pc_label = match com with
  | Skip -> true
- | Assign v e -> (match lub pc_label (label_of_exp lenv e), lookup_env lenv v with
-   (* <= *)
-   | High, Low -> false
-   | _, _ -> true)
-
+ | Assign v e -> (lub pc_label (label_of_exp lenv e)) `leq` lookup_env lenv v
  | Sequence s1 s2 -> typed_com lenv s1 pc_label && typed_com lenv s2 pc_label
  | If cond thn els -> let l = lub pc_label (label_of_exp lenv cond) in
                                   typed_com lenv thn l && typed_com lenv els l
