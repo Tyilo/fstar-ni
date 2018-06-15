@@ -259,11 +259,6 @@ let rec has_low_assign lenv com = match com with
  | While cond body -> has_low_assign lenv body
 
 
-val typed_assign_high : lenv:label_env -> com:com ->
-  Lemma (requires (typed_com lenv com High))
-        (ensures (~ (has_low_assign lenv com)))
-
-
 val no_low_assign_preserves_low_equiv : lenv:label_env -> com:com -> e:value_env -> f:nat ->
   Lemma (requires (~ (has_low_assign lenv com)))
         (ensures (res_equal' lenv e (interpret_com e com f)))
@@ -290,11 +285,9 @@ let rec no_low_assign_preserves_low_equiv lenv com e f = match com with
                           no_low_assign_preserves_low_equiv lenv com e' (f' - 1)
 
 
-val ni_typed_assign : lenv:label_env -> com:com ->
-  Lemma (requires (~ (has_low_assign lenv com)))
-        (ensures (ni_com lenv com))
-
-
+val typed_assign_high : lenv:label_env -> com:com ->
+  Lemma (requires (typed_com lenv com High))
+        (ensures (~ (has_low_assign lenv com)))
 let rec typed_assign_high lenv com = match com with
  | Skip -> ()
  | Assign v e -> ()
@@ -305,6 +298,9 @@ let rec typed_assign_high lenv com = match com with
  | While cond body -> typed_assign_high lenv body
 
 
+val ni_typed_assign : lenv:label_env -> com:com ->
+  Lemma (requires (~ (has_low_assign lenv com)))
+        (ensures (ni_com lenv com))
 let ni_typed_assign lenv com = assert (forall e f. res_equal' lenv e (interpret_com e com f))
 
 
@@ -339,8 +335,6 @@ let rec ni_typed_com_while lenv com e1 e2 f1 f2 = match com with
 val ni_typed_com : lenv:label_env -> com:com ->
   Lemma (requires (typed_com lenv com Low))
         (ensures (ni_com lenv com))
-
-
 let rec ni_typed_com lenv com = match com with
 | Skip -> ()
 | Assign v e -> if label_of_exp lenv e = Low then
