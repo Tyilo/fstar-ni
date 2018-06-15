@@ -35,7 +35,7 @@ let rec interpret_com env com fuel = if fuel = 0 then
   else match com with
  | Skip -> Result env fuel
  | Assign var exp -> Result (update_env env var (interpret_exp env exp)) fuel
- | If cond thn els -> if (not (interpret_exp env cond = 0)) then
+ | If cond thn els -> if (interpret_exp env cond <> 0) then
                         interpret_com env thn fuel
 					  else
                         interpret_com env els fuel
@@ -157,7 +157,7 @@ val equiv_if_finished : env:value_env -> com:com -> f1:nat -> f2:nat ->
 let rec equiv_if_finished env com f1 f2 = match com with
  | Skip -> ()
  | Assign var exp -> ()
- | If cond thn els -> if (not (interpret_exp env cond = 0)) then
+ | If cond thn els -> if (interpret_exp env cond <> 0) then
                         equiv_if_finished env thn f1 f2
 					  else
                         equiv_if_finished env els f1 f2
