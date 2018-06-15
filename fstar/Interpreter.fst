@@ -340,8 +340,15 @@ val ni_typed_com : lenv:label_env -> com:com ->
         (ensures (ni_com lenv com))
 let rec ni_typed_com lenv com = match com with
 | Skip -> ()
-| Assign v e -> if label_of_exp lenv e = Low then
+| Assign v e -> if (lookup_env lenv v = Low) then
+                (
+                  assert (label_of_exp lenv e = Low);
                   ni_typed_exp lenv e
+                )
+                else ()
+| Sequence c1 c2 -> ni_typed_com lenv c1;
+                    ni_typed_com lenv c2;
+                    ni_seq lenv com
 | If cond thn els -> if (label_of_exp lenv cond = High) then
                      (
                        typed_assign_high lenv com;
@@ -354,7 +361,6 @@ let rec ni_typed_com lenv com = match com with
                        ni_typed_com lenv els;
                        ni_if lenv com
                      )
-| Sequence c1 c2 -> ni_typed_com lenv c1; ni_typed_com lenv c2; ni_seq lenv com
 | While cond body -> if (label_of_exp lenv cond = High) then
                      (
                        typed_assign_high lenv com;
