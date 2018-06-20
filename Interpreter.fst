@@ -68,10 +68,14 @@ We need this for proving predicates that rely on (equiv e1 e2) ==> (P(e1, ...) <
 We can't (?) prove equiv ==> (==), so we use assume.
 The other direction is trivial.
 *)
+(*
+We actually don't need this lemma:
+
 val equiv_iff_equal : (e1:value_env) -> (e2:value_env) ->
   Lemma (equiv e1 e2 <==> e1 == e2)
         [SMTPat (equiv e1 e2)]
 let equiv_iff_equal e1 e2 = assume (equiv e1 e2 ==> e1 == e2)
+*)
 
 type low_equiv (lenv:label_env) (e1:value_env) (e2:value_env) =
   forall (x:var). is_low lenv x ==> lookup_env e1 x == lookup_env e2 x
@@ -155,59 +159,6 @@ let rec ni_typed_exp lenv exp = match exp with
  | BinOp left _ right -> ni_typed_exp lenv left; ni_typed_exp lenv right
 
 // Command lemmas
-
-val equiv_if_finished : env:value_env -> com:com -> f1:nat -> f2:nat ->
-  Lemma (requires (finished (interpret_com env com f1) /\ finished (interpret_com env com f2)))
-        (ensures (equiv
-		           (Result?.env (interpret_com env com f1))
-				   (Result?.env (interpret_com env com f2))))
-let rec equiv_if_finished env com f1 f2 = match com with
- | Skip -> ()
- | Assign var exp -> ()
- | If cond thn els -> if (interpret_exp env cond <> 0) then
-                        equiv_if_finished env thn f1 f2
-					  else
-                        equiv_if_finished env els f1 f2
- | Sequence c1 c2 -> let r1 = interpret_com env c1 f1 in
-                     let r2 = interpret_com env c1 f2 in
-					 let Result e1 f1' = r1 in
-					 let Result e2 f2' = r2 in
-					   if out_of_fuel r1 || out_of_fuel r2 then
-					     ()
-					   else
-					   (
-					     equiv_if_finished env c1 f1 f2;
-					     // assert (equiv e1 e2);
-						 // assert (finished r1);
-						 // assert (finished r2);
-					     equiv_if_finished e1 c2 f1' f2'
-					   )
- | While cond body -> if (interpret_exp env cond = 0) then
-                        ()
-					  else
-                        let r1 = interpret_com env body f1 in
-                        let r2 = interpret_com env body f2 in
-					    let Result e1 f1' = r1 in
-					    let Result e2 f2' = r2 in
-							if out_of_fuel r1 || out_of_fuel r2 then
-							  ()
-							else
-							(
-							  equiv_if_finished env body f1 f2;
-							  equiv_if_finished e1 com (f1' - 1) (f2' - 1)
-							)
-
-
-val ni_different_fuel : lenv:label_env -> env:value_env -> com:com -> f1:nat -> f2:nat ->
-  Lemma (requires True)
-        (ensures (res_equal lenv (interpret_com env com f1) (interpret_com env com f2)))
-let ni_different_fuel _ env com f1 f2 =
-  let r1 = interpret_com env com f1 in
-  let r2 = interpret_com env com f2 in
-  match (finished r1), (finished r2) with
-  | true, true -> equiv_if_finished env com f1 f2
-  | _, _ -> ()
-
 
 val ni_seq' : lenv:label_env -> com:com{Sequence? com} -> e1:value_env -> e2:value_env -> f1:nat -> f2:nat ->
   Lemma (requires (ni_com lenv (Sequence?.s1 com) /\ ni_com lenv (Sequence?.s2 com) /\ low_equiv lenv e1 e2))
