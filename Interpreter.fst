@@ -41,9 +41,9 @@ let rec interpret_com env com fuel = if fuel = 0 then
                         interpret_com env els fuel
  | Sequence c1 c2 -> let res = interpret_com env c1 fuel in
                      let Result env' fuel' = res in
-					   if out_of_fuel res then
+					   (*if out_of_fuel res then
 					     res
-					   else
+					   else*)
 						 interpret_com env' c2 fuel'
  | While cond body -> if (interpret_exp env cond = 0) then
                         Result env fuel
@@ -55,9 +55,10 @@ let rec interpret_com env com fuel = if fuel = 0 then
 							else
 							  interpret_com env' com (fuel' - 1)
 
-
+(*
 type equiv (e1:value_env) (e2:value_env) =
   forall (x:var). lookup_env e1 x == lookup_env e2 x
+  *)
 
 (*
 This lemma ensures that iff two value environments agree on the values of all variables,
@@ -97,7 +98,7 @@ type ni_com (lenv:label_env) (com:com) =
 
 
 // Properties of types
-
+(*
 val low_equiv_symmetric : lenv:label_env -> e1:value_env -> e2:value_env ->
   Lemma (requires (low_equiv lenv e1 e2))
         (ensures  (low_equiv lenv e2 e1))
@@ -107,10 +108,12 @@ val equiv_implies_low_equiv : lenv:label_env -> e1:value_env -> e2:value_env ->
   Lemma (requires (equiv e1 e2))
         (ensures  (low_equiv lenv e1 e2))
 let equiv_implies_low_equiv _ _ _ = ()
+*)
 
 
 // Expression lemmas
 
+(*
 val ni_int : lenv:label_env -> n:int ->
   Lemma (requires True)
         (ensures (ni_exp lenv (Int n)))
@@ -149,6 +152,7 @@ val ni_binop : lenv:label_env -> op:binop -> exp1:exp -> exp2:exp ->
   Lemma (requires (ni_exp lenv exp1 /\ ni_exp lenv exp2))
         (ensures (ni_exp lenv (BinOp exp1 op exp2)))
 let ni_binop _ _ _ _ = ()
+*)
 
 val ni_typed_exp : lenv:label_env -> exp:exp ->
   Lemma (requires (label_of_exp lenv exp == Low))
