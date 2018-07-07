@@ -41,9 +41,6 @@ let rec interpret_com env com fuel = if fuel = 0 then
                         interpret_com env els fuel
  | Sequence c1 c2 -> let res = interpret_com env c1 fuel in
                      let Result env' fuel' = res in
-					   (*if out_of_fuel res then
-					     res
-					   else*)
 						 interpret_com env' c2 fuel'
  | While cond body -> if (interpret_exp env cond = 0) then
                         Result env fuel
@@ -55,28 +52,7 @@ let rec interpret_com env com fuel = if fuel = 0 then
 							else
 							  interpret_com env' com (fuel' - 1)
 
-(*
-type equiv (e1:value_env) (e2:value_env) =
-  forall (x:var). lookup_env e1 x == lookup_env e2 x
-  *)
-
-(*
-This lemma ensures that iff two value environments agree on the values of all variables,
-then F* should think of them as being equal.
-
-We need this for proving predicates that rely on (equiv e1 e2) ==> (P(e1, ...) <==> P(e2, ...)).
-
-We can't (?) prove equiv ==> (==), so we use assume.
-The other direction is trivial.
-*)
-(*
-We actually don't need this lemma:
-
-val equiv_iff_equal : (e1:value_env) -> (e2:value_env) ->
-  Lemma (equiv e1 e2 <==> e1 == e2)
-        [SMTPat (equiv e1 e2)]
-let equiv_iff_equal e1 e2 = assume (equiv e1 e2 ==> e1 == e2)
-*)
+// Definitions
 
 type low_equiv (lenv:label_env) (e1:value_env) (e2:value_env) =
   forall (x:var). is_low lenv x ==> lookup_env e1 x == lookup_env e2 x
@@ -96,63 +72,7 @@ type ni_com' (lenv:label_env) (com:com) (e1:value_env) (e2:value_env) (fuel1:nat
 type ni_com (lenv:label_env) (com:com) =
   forall (e1:value_env) (e2:value_env) (f1:nat) (f2:nat). ni_com' lenv com e1 e2 f1 f2
 
-
-// Properties of types
-(*
-val low_equiv_symmetric : lenv:label_env -> e1:value_env -> e2:value_env ->
-  Lemma (requires (low_equiv lenv e1 e2))
-        (ensures  (low_equiv lenv e2 e1))
-let low_equiv_symmetric _ _ _ = ()
-
-val equiv_implies_low_equiv : lenv:label_env -> e1:value_env -> e2:value_env ->
-  Lemma (requires (equiv e1 e2))
-        (ensures  (low_equiv lenv e1 e2))
-let equiv_implies_low_equiv _ _ _ = ()
-*)
-
-
 // Expression lemmas
-
-(*
-val ni_int : lenv:label_env -> n:int ->
-  Lemma (requires True)
-        (ensures (ni_exp lenv (Int n)))
-let ni_int _ _ = ()
-
-
-val ni_low_var : lenv:label_env -> var:var ->
-  Lemma (requires (is_low lenv var))
-        (ensures (ni_exp lenv (Var var)))
-let ni_low_var _ _ = ()
-
-
-val var_lemma : var:var -> n:int ->
-  Lemma (requires True)
-        (ensures (interpret_exp (make_env 0 [(var, n)]) (Var var) = n))
-let var_lemma _ _ = ()
-
-
-val low_equiv_hi : lenv:label_env -> e1:value_env -> e2:value_env -> var:var ->
-  Lemma (requires ((low_equiv lenv e1 e2) /\ (lookup_env e1 var) =!= (lookup_env e2 var)))
-        (ensures (is_high lenv var))
-let low_equiv_hi _ _ _ _ = ()
-
-
-val ni_high_var : lenv:label_env -> var:var ->
-  Lemma (requires (is_high lenv var))
-        (ensures (~ (ni_exp lenv (Var var))))
-let ni_high_var lenv var =
-  let exp = Var var in
-  let e1 = make_env 0 [(var, 0)] in
-  let e2 = make_env 0 [(var, 1)] in
-	low_equiv_hi lenv e1 e2 var
-
-
-val ni_binop : lenv:label_env -> op:binop -> exp1:exp -> exp2:exp ->
-  Lemma (requires (ni_exp lenv exp1 /\ ni_exp lenv exp2))
-        (ensures (ni_exp lenv (BinOp exp1 op exp2)))
-let ni_binop _ _ _ _ = ()
-*)
 
 val ni_typed_exp : lenv:label_env -> exp:exp ->
   Lemma (requires (label_of_exp lenv exp == Low))
@@ -356,28 +276,6 @@ let _ =
 
 	assert (ni_com lenv Skip);
 	assert (ni_com lenv (Assign "lo" exp));
-
-    (*
-	let not_ni_com = Assign "lo" (Var "hi") in
-	let env0 = make_env 0 [("lo", 0); ("hi", 0)] in
-	let env1 = make_env 0 [("lo", 0); ("hi", 1)] in
-
-	assert (low_equiv lenv env0 env1);
-
-	let r0 = interpret_com env0 not_ni_com 1 in
-	let r1 = interpret_com env1 not_ni_com 1 in
-
-	assert (finished r0);
-	assert (finished r1);
-
-	assert (lookup_env (Result?.env r0) "lo" = 0);
-	assert (lookup_env (Result?.env r1) "lo" = 1);
-
-	assert (~ (low_equiv lenv (Result?.env r0) (Result?.env r1)));
-	assert (~ (res_equal lenv r0 r1));
-
-	assert (~ (ni_com lenv not_ni_com));
-    *)
 
 	let seq_com = (Sequence (Assign "hi" (Var "lo")) (Assign "lo" (Var "hi"))) in
 
